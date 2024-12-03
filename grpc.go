@@ -33,6 +33,15 @@ func createAndObserveGRPCConn(ctx context.Context, ch chan error, target string,
 	} else {
 		pool, _ := x509.SystemCertPool()
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(pool, "")))
+
+		xtokens := md.Get("x-token")
+		if xtokens != nil && len(xtokens) > 0 {
+			opts = append(opts,
+				grpc.WithPerRPCCredentials(&auth{
+					token: xtokens[0],
+				}),
+			)
+		}
 	}
 
 	hostname := u.Hostname()
@@ -101,4 +110,19 @@ func createAndObserveGRPCConn(ctx context.Context, ch chan error, target string,
 	}()
 
 	return conn, nil
+}
+
+// auth implements the credentials.PerRPCCredentials interface to support x-token authentication for grpc requests.
+type auth struct {
+	token string
+}
+
+func (a *auth) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"x-token": a.token,
+	}, nil
+}
+
+func (auth) RequireTransportSecurity() bool {
+	return false
 }
